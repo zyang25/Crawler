@@ -1,5 +1,6 @@
 package com.charles.gs;
 
+import java.io.FileWriter;
 import java.io.IOException;
 import java.io.InputStreamReader;
 import java.io.Reader;
@@ -29,16 +30,23 @@ public class Search implements Runnable{
 	static URL url;
 	static LinkedList<String> urlset;
 	public UrlPool urlpool;
-	public static int tire = 0;
-	public static int tireamount = 0;
-	public static long count = 0;
+	public int seed;
+	public int tire;
+	public int tireamount;
+	public long count;
+	
+	public static WriteTxt wt;
 	
 	public URL getURL(){
 		return url;
 	}
 	
-	Search(UrlPool up){
+	Search(UrlPool up,int seed){
 		this.urlpool = up;
+		this.tire = 0;
+		this.count = 0;
+		this.tireamount = 0;
+		this.seed = seed;
 	}
 	
 	public static void main(String[] args) throws IOException {
@@ -67,16 +75,21 @@ public class Search implements Runnable{
 		//up.PrintUrl();
 		
 		
-		UrlPool up = new UrlPool();
-		Search search = new Search(up);
+		UrlPool up1 = new UrlPool("www.alibaba.com/us");
+		UrlPool up2 = new UrlPool("en.wikipedia.org/wiki/Alibaba_Group");
+		UrlPool up3 = new UrlPool("www.alibabagroup.com");
+		Search seed1 = new Search(up1,1);
+		Search seed2 = new Search(up2,2);
+		Search seed3 = new Search(up3,3);
 		
-		Thread t1 = new Thread(search);
-		Thread t2 = new Thread(search);
-		Thread t3 = new Thread(search);
-		Thread t4 = new Thread(search);
-		t1.start();
+		wt = new WriteTxt(); 
+		
+		Thread t1 = new Thread(seed1);
+		Thread t2 = new Thread(seed2);
+		Thread t3 = new Thread(seed3);
+		//t1.start();
 		//t2.start();
-		//t3.start();
+		t3.start();
 	}
 	
 	public void SearchUrl(){
@@ -86,40 +99,43 @@ public class Search implements Runnable{
 				String url = urlpool.getUrl();
 				System.out.println("");
 				System.out.println("Searching..  "+ url);
-				doc = Jsoup.connect("http://"+ url).ignoreHttpErrors(true).get();
+				doc = Jsoup.connect("http://"+ url).ignoreHttpErrors(true).ignoreContentType(true).get();
+				Elements links = doc.select("a[href]");
+				for (Element link : links) {
+					if(urlpool.ParseUrl(link.toString())!=null){
+						if(tire < 1)
+							urlpool.AddUrl(urlpool.ParseUrl(link.toString()));
+						else
+							urlpool.AddToLastTirePool(urlpool.ParseUrl(link.toString()));
+					}
+				}
 			} catch (Exception e) {
 				System.out.println(e.toString());
 			}
-			Elements links = doc.select("a[href]");
-			for (Element link : links) {
-				if(urlpool.ParseUrl(link.toString())!=null){
-					urlpool.AddUrl(urlpool.ParseUrl(link.toString()));
-				}
-			}
+			//urlpool.PrintUrlFromlist();
+			urlpool.WriteListToTxt(wt, tire+1, seed);
 			if(tireamount==0&&count==0)
 				tireamount = urlpool.size();
-		urlpool.PrintUrl();
 		}else
 			System.out.println("All url is reached");
 	}
 	
 	
 	@Override
-	public synchronized void run() {
+	public void run() {
 		
 		while(!urlpool.isEmpty()){
 			SearchUrl();
 			count++;
 			System.out.println("Tire = "+tire+" Count = "+count+" Tireamount = "+tireamount);
-			if(count == tireamount){
+			System.out.println(Thread.currentThread());
+			if(count == tireamount+1){//The links in the tire has been reached
 				tireamount =0;
 				count = 0;
 				tire++;
-				if(tire==1)
-					break;
 			}
 		}
-		
+		urlpool.PrintUrlFromlist();
 		System.out.println("Done");
 	}
 	
